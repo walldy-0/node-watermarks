@@ -4,9 +4,27 @@ const fs = require('fs');
 
 const showErrorMessage = () => console.log('Something went wrong... Try again');
 
-const addTextWatermarkToImage = async function(inputFile, outputFile, text) {
+const editImage = async function(image, action) {
+  switch (action) {
+    case 'make image brighter':
+      image.brightness(0.3);
+      break;
+    case 'increase contrast':
+      image.contrast(0.3);
+      break;
+    case 'make image b&w':
+      image.greyscale();
+      break;
+    case 'invert image':
+      image.invert();
+      break;
+    default:
+      break;
+  }
+};
+
+const addTextWatermarkToImage = async function(image, outputFile, text) {
   try {
-    const image = await Jimp.read(inputFile);
     const font = await Jimp.loadFont(Jimp.FONT_SANS_32_WHITE);
     const textData = {
       text,
@@ -25,9 +43,8 @@ const addTextWatermarkToImage = async function(inputFile, outputFile, text) {
   startApp();
 };
 
-const addImageWatermarkToImage = async function(inputFile, outputFile, watermarkFile) {
+const addImageWatermarkToImage = async function(image, outputFile, watermarkFile) {
   try {
-    const image = await Jimp.read(inputFile);
     const watermark = await Jimp.read(watermarkFile);
     const x = image.getWidth() / 2 - watermark.getWidth() / 2;
     const y = image.getHeight() / 2 - watermark.getHeight() / 2;
@@ -65,41 +82,64 @@ const startApp = async () => {
   // if answer is no, just quit the app
   if(!answer.start) process.exit();
 
-  // ask about input file and watermark type
-  const options = await inquirer.prompt([{
+  // ask about input file
+  const input = await inquirer.prompt([{
     name: 'inputImage',
     type: 'input',
     message: 'What file do you want to mark?',
     default: 'test.jpg',
-  }, {
-    name: 'watermarkType',
-    type: 'list',
-    choices: ['Text watermark', 'Image watermark'],
   }]);
-
-  const inputPath = './img/' + options.inputImage;
-
+  
+  const inputPath = './img/' + input.inputImage;
+  
   if (fs.existsSync(inputPath)) {
-    if(options.watermarkType === 'Text watermark') {
+    const image = await Jimp.read(inputPath);
+
+    const editAnswer = await inquirer.prompt([{
+      name: 'edit',
+      message: 'Do you want any extra modification?',
+      type: 'confirm',
+    }]);
+
+    if (editAnswer.edit) {
+      const editOptions = await inquirer.prompt([{
+        name: 'option',
+        type: 'list',
+        choices: ['make image brighter', 'increase contrast', 'make image b&w', 'invert image'],
+        message: 'Choice modification type:',
+      }]);
+
+      editImage(image, editOptions.option);
+    }
+
+
+    const markOptions = await inquirer.prompt([{
+      name: 'watermarkType',
+      type: 'list',
+      choices: ['Text watermark', 'Image watermark'],
+      message: 'Choice watermark type:',
+    }]);
+  
+    if(markOptions.watermarkType === 'Text watermark') {
       const text = await inquirer.prompt([{
         name: 'value',
         type: 'input',
         message: 'Type your watermark text:',
       }]);
-      options.watermarkText = text.value;
-      addTextWatermarkToImage(inputPath, './img/' + prepareOutputFilename(options.inputImage), options.watermarkText);
+      markOptions.watermarkText = text.value;
+      addTextWatermarkToImage(image, './img/' + prepareOutputFilename(input.inputImage), markOptions.watermarkText);
     }
     else {
-      const image = await inquirer.prompt([{
+      const markImage = await inquirer.prompt([{
         name: 'filename',
         type: 'input',
         message: 'Type your watermark name:',
         default: 'logo.png',
       }])
-      options.watermarkImage = image.filename;
-      const watermarkPath = './img/' + options.watermarkImage;
+      markOptions.watermarkImage = markImage.filename;
+      const watermarkPath = './img/' + markOptions.watermarkImage;
       if (fs.existsSync(watermarkPath)) {
-        addImageWatermarkToImage(inputPath, './img/' + prepareOutputFilename(options.inputImage), watermarkPath);
+        addImageWatermarkToImage(image, './img/' + prepareOutputFilename(input.inputImage), watermarkPath);
       } else {
         showErrorMessage();
       }
